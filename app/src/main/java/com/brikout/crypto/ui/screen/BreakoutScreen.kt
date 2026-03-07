@@ -11,44 +11,28 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.brikout.crypto.data.model.BreakoutSignal
+import java.net.URLEncoder
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BreakoutScreen(uiState: BreakoutUiState) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "BRIK Signals",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
-        }
-    ) { paddingValues ->
+    Scaffold { paddingValues ->
         when {
             uiState.isLoading && uiState.signals.isEmpty() -> {
                 Column(
@@ -75,7 +59,10 @@ fun BreakoutScreen(uiState: BreakoutUiState) {
                         key = { "${it.symbol}-${it.timestamp}" },
                         contentType = { "breakout_signal_card" }
                     ) { signal ->
-                        BreakoutSignalCard(signal)
+                        BreakoutSignalCard(
+                            signal = signal,
+                            currentPrice = uiState.livePrices[signal.symbol.uppercase()]
+                        )
                     }
                 }
             }
@@ -84,7 +71,9 @@ fun BreakoutScreen(uiState: BreakoutUiState) {
 }
 
 @Composable
-private fun BreakoutSignalCard(signal: BreakoutSignal) {
+private fun BreakoutSignalCard(signal: BreakoutSignal, currentPrice: Double?) {
+    val uriHandler = LocalUriHandler.current
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -120,28 +109,66 @@ private fun BreakoutSignalCard(signal: BreakoutSignal) {
                 }
             }
 
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    .padding(horizontal = 12.dp, vertical = 10.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text(
-                    text = "ENTRY PRICE",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                PricePanel(
+                    modifier = Modifier.weight(1f),
+                    label = "BREAKOUT",
+                    value = signal.price.toDisplayPrice()
                 )
-                Text(
-                    text = signal.price.toDisplayPrice(),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold
+                PricePanel(
+                    modifier = Modifier.weight(1f),
+                    label = "LIVE",
+                    value = currentPrice?.toDisplayPrice() ?: "--"
                 )
+            }
+
+            Button(
+                onClick = {
+                    uriHandler.openUri(buildTradingViewLink(signal.symbol, signal.timeframe))
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(text = "Open TradingView")
             }
         }
     }
+}
+
+@Composable
+private fun PricePanel(modifier: Modifier = Modifier, label: String, value: String) {
+    Column(
+        modifier = modifier
+            .background(
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                shape = RoundedCornerShape(12.dp)
+            )
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+private fun buildTradingViewLink(symbol: String, timeframe: String): String {
+    val encodedSymbol = URLEncoder.encode("BYBIT:${symbol.uppercase()}", "UTF-8")
+    val interval = when (timeframe.lowercase()) {
+        "15m" -> "15"
+        "1h" -> "60"
+        else -> "15"
+    }
+    return "https://www.tradingview.com/chart/?symbol=$encodedSymbol&interval=$interval"
 }
 
 private fun Double.toDisplayPrice(): String {
