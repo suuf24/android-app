@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">BRIK</string>
+    <string name="notification_channel_name">Breakout Alerts</string>
+    <string name="notification_channel_description">Notifies when a new breakout signal appears.</string>
+</resources>
