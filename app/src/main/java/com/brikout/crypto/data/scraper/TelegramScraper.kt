@@ -18,19 +18,33 @@ class TelegramScraper {
                 .timeout(15_000)
                 .get()
 
-            val messageTexts = doc.select("div.tgme_widget_message_text")
-            messageTexts.mapNotNull { element ->
-                extractJson(element.text())
-                    ?.let { json -> parseBreakout(json) }
-            }
+            doc.select("div.tgme_widget_message_text")
+                .flatMap { element ->
+                    val blocksFromHtml = extractJsonBlocks(element.html())
+                    if (blocksFromHtml.isNotEmpty()) {
+                        blocksFromHtml
+                    } else {
+                        extractJsonBlocks(element.text())
+                    }
+                }
+                .mapNotNull(::parseBreakout)
+                .distinctBy { "${it.symbol}_${it.timestamp}" }
         }.getOrElse { emptyList() }
     }
 
-    private fun extractJson(text: String): String? {
-        val start = text.indexOf('{')
-        val end = text.lastIndexOf('}')
-        if (start < 0 || end <= start) return null
-        return text.substring(start, end + 1)
+    private fun extractJsonBlocks(content: String): List<String> {
+        if (content.isBlank()) return emptyList()
+        return JSON_BLOCK_REGEX.findAll(content)
+            .map { htmlEntityCleanup(it.value) }
+            .toList()
+    }
+
+    private fun htmlEntityCleanup(value: String): String {
+        return value
+            .replace("&quot;", "\"")
+            .replace("&#34;", "\"")
+            .replace("&amp;", "&")
+            .trim()
     }
 
     private fun parseBreakout(rawJson: String): BreakoutSignal? {
@@ -56,5 +70,6 @@ class TelegramScraper {
         private const val DEFAULT_CHANNEL_URL = "https://t.me/s/BybitSn"
         private const val USER_AGENT =
             "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
+        private val JSON_BLOCK_REGEX = Regex("\\{[\\s\\S]*?\\}")
     }
 }
